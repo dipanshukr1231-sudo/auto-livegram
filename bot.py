@@ -110,8 +110,25 @@ def _env_ids(name: str) -> set:
 
 TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", "data/bot.db")).expanduser().resolve()
-BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", "data/backups")).expanduser().resolve()
+RENDER_PERSISTENT_DIR = Path("/var/data")
+
+
+def _resolve_storage_path(env_name: str, default_relative: str, subdir: Optional[str] = None) -> Path:
+    """Pick a durable storage location automatically.
+
+    Explicit environment variables always win. When a Render persistent disk is
+    mounted at /var/data it is used without any configuration; otherwise the local
+    default is kept.
+    """
+    explicit = os.environ.get(env_name, "").strip()
+    base = Path(explicit).expanduser() if explicit else (RENDER_PERSISTENT_DIR if RENDER_PERSISTENT_DIR.is_dir() else Path(default_relative))
+    if subdir:
+        base = base / subdir
+    return base.expanduser().resolve()
+
+
+DATABASE_PATH = _resolve_storage_path("DATABASE_PATH", "data/bot.db")
+BACKUP_DIR = _resolve_storage_path("BACKUP_DIR", "data/backups", "backups")
 MEDIA_TMP_DIR = Path(os.environ.get("MEDIA_TMP_DIR", "data/tmp")).expanduser().resolve()
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "").strip()
 ALLOW_EPHEMERAL_SQLITE = os.environ.get("ALLOW_EPHEMERAL_SQLITE", "0").strip() == "1"
@@ -4140,13 +4157,13 @@ def fail_fast_checks() -> list:
     if not INITIAL_OWNER_IDS:
         problems.append("OWNER_IDS is not set: nobody would be able to reach the Owner Panel.")
     if not db.is_postgres:
-        container = Path("/.dockerenv").exists() or bool(os.environ.get("RENDER"))
         on_disk = str(DATABASE_PATH).startswith("/var/")
-        if container and not on_disk and not ALLOW_EPHEMERAL_SQLITE:
+        if not on_disk and not ALLOW_EPHEMERAL_SQLITE:
             problems.append(
-                f"SQLite is configured at {DATABASE_PATH}, which is likely an ephemeral container filesystem.\n"
-                "    Set DATABASE_URL (PostgreSQL) or point DATABASE_PATH at a mounted persistent disk.\n"
-                "    Set ALLOW_EPHEMERAL_SQLITE=1 to accept data loss on redeploy."
+                f"SQLite is configured at {DATABASE_PATH}, which is an ephemeral container filesystem.\n"
+                "    Attach a Render persistent disk mounted at /var/data (then DATABASE_PATH is found\n"
+                "    automatically), set DATABASE_URL (PostgreSQL), or set ALLOW_EPHEMERAL_SQLITE=1\n"
+                "    to accept losing all data on every redeploy."
             )
     if db.is_postgres and asyncpg is None:
         problems.append("DATABASE_URL is set but asyncpg is not installed.")
@@ -4178,6 +4195,7 @@ async def async_main(stop_event: asyncio.Event):
         f"✅ <b>Platform online</b>\nVersion {APP_VERSION} · {await db.clone_count()}/{MAX_CLONES} clones registered\n"
         f"Serving {len(results)} clone start attempt(s) from the last boot."
     )
+    logger.info("Storage: database=%s | backups=%s", DATABASE_PATH, BACKUP_DIR)
     sweeper = asyncio.create_task(_housekeeping(), name="housekeeping")
     await stop_event.wait()
     sweeper.cancel()
