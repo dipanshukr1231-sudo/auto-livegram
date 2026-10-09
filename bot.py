@@ -131,7 +131,7 @@ DATABASE_PATH = _resolve_storage_path("DATABASE_PATH", "data/bot.db")
 BACKUP_DIR = _resolve_storage_path("BACKUP_DIR", "data/backups", "backups")
 MEDIA_TMP_DIR = Path(os.environ.get("MEDIA_TMP_DIR", "data/tmp")).expanduser().resolve()
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "").strip()
-ALLOW_EPHEMERAL_SQLITE = os.environ.get("ALLOW_EPHEMERAL_SQLITE", "0").strip() == "1"
+ALLOW_EPHEMERAL_SQLITE = os.environ.get("ALLOW_EPHEMERAL_SQLITE", "1").strip() == "1"
 ACTIVE_DAYS = _env_int("ACTIVE_DAYS", 30, 1, 365)
 BROADCAST_WORKERS = _env_int("BROADCAST_WORKERS", 8, 1, 20)
 BROADCAST_PER_CLONE_CONCURRENCY = _env_int("BROADCAST_PER_CLONE_CONCURRENCY", 4, 1, 10)
